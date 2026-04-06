@@ -2,7 +2,9 @@ flask
 flask-cors
 pandas
 numpy
-supabase
+psycopg2-binary
+SQLAlchemy
 python-dotenv
 gunicorn
 scikit-learn
+firebase-admin

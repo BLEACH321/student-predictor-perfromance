@@ -25,6 +25,7 @@ export function AddStudent({ onAddStudent }: AddStudentProps) {
   });
 
   const [subjectMarks, setSubjectMarks] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (formData.grade && GRADE_SUBJECTS[formData.grade]) {
@@ -36,41 +37,46 @@ export function AddStudent({ onAddStudent }: AddStudentProps) {
     }
   }, [formData.grade]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    const studyHours = parseFloat(formData.studyHours);
-    const attendance = parseFloat(formData.attendance);
-    const assignmentScore = parseFloat(formData.assignmentScore);
-    const previousMarks = parseFloat(formData.previousMarks);
+    try {
+      const studyHours = parseFloat(formData.studyHours);
+      const attendance = parseFloat(formData.attendance);
+      const assignmentScore = parseFloat(formData.assignmentScore);
+      const previousMarks = parseFloat(formData.previousMarks);
 
-    const subjects: Subject[] = Object.entries(subjectMarks).map(([name, score]) => ({
-      name,
-      score: parseFloat(score) || 0
-    }));
+      const subjects: Subject[] = Object.entries(subjectMarks).map(([name, score]) => ({
+        name,
+        score: parseFloat(score) || 0
+      }));
 
-    const student = {
-      name: formData.name,
-      grade: formData.grade,
-      studyHours,
-      attendance,
-      assignmentScore,
-      previousMarks,
-      subjects,
-    };
+      const student = {
+        name: formData.name,
+        grade: formData.grade,
+        studyHours,
+        attendance,
+        assignmentScore,
+        previousMarks,
+        subjects,
+      };
 
-    onAddStudent(student);
+      await onAddStudent(student);
 
-    // Reset form
-    setFormData({
-      name: '',
-      grade: '' as any,
-      studyHours: '',
-      attendance: '',
-      assignmentScore: '',
-      previousMarks: '',
-    });
-    setSubjectMarks({});
+      // Reset form
+      setFormData({
+        name: '',
+        grade: '' as any,
+        studyHours: '',
+        attendance: '',
+        assignmentScore: '',
+        previousMarks: '',
+      });
+      setSubjectMarks({});
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -242,10 +248,17 @@ export function AddStudent({ onAddStudent }: AddStudentProps) {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             type="submit"
-            className="w-full py-5 rounded-[1.5rem] bg-primary text-white font-bold text-xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 flex items-center justify-center gap-3 transition-all"
+            disabled={loading}
+            className={`w-full py-5 rounded-[1.5rem] text-white font-bold text-xl shadow-xl flex items-center justify-center gap-3 transition-all ${
+              loading ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30'
+            }`}
           >
-            <CheckCircle size={24} />
-            Add Student & Synthesize Analysis
+            {loading ? (
+              <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <CheckCircle size={24} />
+            )}
+            {loading ? 'Synthesizing Analysis...' : 'Add Student & Synthesize Analysis'}
           </motion.button>
         </form>
       </div>

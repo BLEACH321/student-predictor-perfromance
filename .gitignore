@@ -8,3 +8,12 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+.vercel
+.env*.local
+
+# Sensitive files
+*.db
+serviceAccountKey.json
+service_account.json
+firebase-adminsdk.json

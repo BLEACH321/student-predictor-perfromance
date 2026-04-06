@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RoleSelection } from './components/RoleSelection';
 import { StudentLogin } from './components/StudentLogin';
 import { TeacherLogin } from './components/TeacherLogin';
@@ -19,42 +19,23 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<Role>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [activeAdminView, setActiveAdminView] = useState('dashboard');
-  const [students, setStudents] = useState<Student[]>([
-    { 
-      id: '1', 
-      name: 'Alice Smith', 
-      grade: '10', 
-      studyHours: 25, 
-      attendance: 92, 
-      assignmentScore: 88, 
-      previousMarks: 85, 
-      subjects: [
-        { name: 'Mathematics', score: 92 },
-        { name: 'Science', score: 88 },
-        { name: 'Social Studies', score: 85 },
-        { name: 'English', score: 90 },
-        { name: 'Language', score: 87 }
-      ],
-      predictedMarks: 88.5 
-    },
-    { 
-      id: '2', 
-      name: 'Bob Johnson', 
-      grade: 'Engineering', 
-      studyHours: 15, 
-      attendance: 75, 
-      assignmentScore: 70, 
-      previousMarks: 72, 
-      subjects: [
-        { name: 'Eng Math', score: 65 },
-        { name: 'Data Structures', score: 75 },
-        { name: 'OS', score: 70 },
-        { name: 'Digital Logic', score: 68 },
-        { name: 'OOPs', score: 72 }
-      ],
-      predictedMarks: 71.0 
-    },
-  ]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/students`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setStudents(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch students from backend:", error);
+      }
+    };
+    fetchStudents();
+  }, []);
 
   const handleRoleSelection = (role: 'student' | 'admin') => {
     setCurrentRole(role);
@@ -85,34 +66,46 @@ export default function App() {
     setSelectedStudent(null);
   };
 
-  const handleAddStudent = (studentData: Omit<Student, 'id' | 'predictedMarks'>) => {
-    // Subject average contributes to prediction
-    const subjectAvg = studentData.subjects.reduce((sum, s) => sum + s.score, 0) / studentData.subjects.length;
-    
-    // Weighted prediction
-    const studyWeight = 0.20;
-    const attendanceWeight = 0.20;
-    const assignmentWeight = 0.20;
-    const previousWeight = 0.20;
-    const subjectWeight = 0.20;
+  const handleAddStudent = async (studentData: Omit<Student, 'id' | 'predictedMarks'>) => {
+    try {
+      // 1. Get prediction from backend
+      const predictRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentData),
+      });
+      const predictData = await predictRes.json();
+      const predictedMarks = predictData.predictedMarks;
 
-    const normalizedStudyHours = Math.min((studentData.studyHours / 40) * 100, 100);
+      const studentWithPrediction: Student = {
+        ...studentData,
+        id: Date.now().toString(),
+        predictedMarks,
+      };
 
-    const predictedMarks =
-      normalizedStudyHours * studyWeight +
-      studentData.attendance * attendanceWeight +
-      studentData.assignmentScore * assignmentWeight +
-      studentData.previousMarks * previousWeight +
-      subjectAvg * subjectWeight;
+      // 2. Store in Neon Database via backend
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/store`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentWithPrediction),
+      });
 
-    const newStudent: Student = {
-      ...studentData,
-      id: Date.now().toString(),
-      predictedMarks: Math.round(predictedMarks * 10) / 10,
-    };
-
-    setStudents([...students, newStudent]);
-    setActiveAdminView('predictions');
+      setStudents([...students, studentWithPrediction]);
+      setActiveAdminView('predictions');
+    } catch (error) {
+      console.error("Error connecting to backend:", error);
+      // Fallback to local calculation if backend is down
+      const subjectAvg = studentData.subjects.reduce((sum, s) => sum + s.score, 0) / studentData.subjects.length;
+      const fallbackPredicted = (studentData.studyHours * 0.2 + studentData.attendance * 0.2 + studentData.assignmentScore * 0.2 + studentData.previousMarks * 0.2 + subjectAvg * 0.2);
+      
+      const newStudent: Student = {
+        ...studentData,
+        id: Date.now().toString(),
+        predictedMarks: Math.round(fallbackPredicted * 10) / 10,
+      };
+      setStudents([...students, newStudent]);
+      setActiveAdminView('predictions');
+    }
   };
 
   const renderAdminView = () => {
@@ -166,10 +159,21 @@ export default function App() {
   // Admin Dashboard
   return (
     <div className="size-full flex flex-col" style={{ backgroundColor: '#F5F7FA' }}>
-      <AdminHeader onLogout={handleBackToRoleSelection} />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeAdminView} onViewChange={setActiveAdminView} />
-        <main className="flex-1 overflow-y-auto p-8">
+      <AdminHeader 
+        onLogout={handleBackToRoleSelection} 
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+      />
+      <div className="flex flex-1 overflow-hidden relative">
+        <Sidebar 
+          activeView={activeAdminView} 
+          onViewChange={(view) => {
+            setActiveAdminView(view);
+            setIsSidebarOpen(false);
+          }} 
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+        <main className={`flex-1 overflow-y-auto p-4 md:p-8 transition-all duration-300 ${isSidebarOpen ? 'blur-sm md:blur-none opacity-50 md:opacity-100' : ''}`}>
           <div className="max-w-7xl mx-auto">
             {renderAdminView()}
           </div>
