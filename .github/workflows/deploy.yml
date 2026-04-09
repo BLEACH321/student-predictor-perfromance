@@ -44,6 +44,7 @@ jobs:
       - name: Build
         run: |
           cd "Apply Design Elements"
+          echo "VITE_API_URL=https://hook.eu1.make.com/sjxmhsiyo4f78aytq3munhouts66669u" > .env
           npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v4
