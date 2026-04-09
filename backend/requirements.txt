@@ -7,4 +7,5 @@ SQLAlchemy
 python-dotenv
 gunicorn
 scikit-learn
-firebase-admin
+openpyxl
+requests

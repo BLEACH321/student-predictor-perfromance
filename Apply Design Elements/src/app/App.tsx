@@ -25,13 +25,24 @@ export default function App() {
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/students`);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setStudents(data);
+        const apiUrl = import.meta.env.VITE_API_URL;
+        // If it's a Make.com webhook, we send a POST with action=fetch
+        if (apiUrl?.includes('make.com')) {
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'fetch_students' }),
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) setStudents(data);
+        } else {
+          // Standard backend fallback
+          const res = await fetch(`${apiUrl || 'http://localhost:8080'}/students`);
+          const data = await res.json();
+          if (Array.isArray(data)) setStudents(data);
         }
       } catch (error) {
-        console.error("Failed to fetch students from backend:", error);
+        console.error("Failed to fetch students:", error);
       }
     };
     fetchStudents();
@@ -68,29 +79,53 @@ export default function App() {
 
   const handleAddStudent = async (studentData: Omit<Student, 'id' | 'predictedMarks'>) => {
     try {
-      // 1. Get prediction from backend
-      const predictRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentData),
-      });
-      const predictData = await predictRes.json();
-      const predictedMarks = predictData.predictedMarks;
+      const apiUrl = import.meta.env.VITE_API_URL;
+      
+      if (apiUrl?.includes('make.com')) {
+        // Combined predict and store for Make.com efficiency
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            action: 'predict_and_store',
+            studentData 
+          }),
+        });
+        const result = await res.json();
+        
+        // Make.com should return the full student object with predictedMarks
+        const studentWithPrediction = result.student || {
+          ...studentData,
+          id: result.id || Date.now().toString(),
+          predictedMarks: result.predictedMarks
+        };
+        
+        setStudents([...students, studentWithPrediction]);
+      } else {
+        // 1. Get prediction from backend
+        const predictRes = await fetch(`${apiUrl || 'http://localhost:8080'}/predict`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(studentData),
+        });
+        const predictData = await predictRes.json();
+        const predictedMarks = predictData.predictedMarks;
 
-      const studentWithPrediction: Student = {
-        ...studentData,
-        id: Date.now().toString(),
-        predictedMarks,
-      };
+        const studentWithPrediction: Student = {
+          ...studentData,
+          id: Date.now().toString(),
+          predictedMarks,
+        };
 
-      // 2. Store in Neon Database via backend
-      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/store`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentWithPrediction),
-      });
+        // 2. Store in Database via backend
+        await fetch(`${apiUrl || 'http://localhost:8080'}/store`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(studentWithPrediction),
+        });
 
-      setStudents([...students, studentWithPrediction]);
+        setStudents([...students, studentWithPrediction]);
+      }
       setActiveAdminView('predictions');
     } catch (error) {
       console.error("Error connecting to backend:", error);
