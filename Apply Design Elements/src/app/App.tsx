@@ -82,23 +82,25 @@ export default function App() {
       const apiUrl = import.meta.env.VITE_API_URL;
       
       if (apiUrl?.includes('make.com')) {
+        // Calculate prediction locally for static deployment reliability
+        const subjectAvg = studentData.subjects.reduce((sum, s) => sum + s.score, 0) / (studentData.subjects.length || 1);
+        const predictedMarks = Math.round((studentData.studyHours * 0.25 + studentData.attendance * 0.25 + studentData.assignmentScore * 0.3 + studentData.previousMarks * 0.2) * 100) / 100;
+
+        const studentWithPrediction: Student = {
+          ...studentData,
+          id: Date.now().toString(),
+          predictedMarks,
+        };
+
         // Combined predict and store for Make.com efficiency
-        const res = await fetch(apiUrl, {
+        await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            action: 'predict_and_store',
-            studentData 
+            action: 'store_record',
+            ...studentWithPrediction 
           }),
         });
-        const result = await res.json();
-        
-        // Make.com should return the full student object with predictedMarks
-        const studentWithPrediction = result.student || {
-          ...studentData,
-          id: result.id || Date.now().toString(),
-          predictedMarks: result.predictedMarks
-        };
         
         setStudents([...students, studentWithPrediction]);
       } else {
